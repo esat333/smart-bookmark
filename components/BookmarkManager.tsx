@@ -47,7 +47,6 @@ export default function BookmarkManager({ initialBookmarks, user }: { initialBoo
         const url = formData.get('url') as string
         const formElement = e.currentTarget
 
-        // Create temporary ID for optimistic update
         const tempId = Math.random().toString(36).substring(7)
         const newBookmark: Bookmark = {
             id: tempId,
@@ -56,14 +55,12 @@ export default function BookmarkManager({ initialBookmarks, user }: { initialBoo
             created_at: new Date().toISOString(),
         }
 
-        // Optimistic update: add to state immediately
         setBookmarks((prev) => [newBookmark, ...prev])
         formElement.reset()
 
         const { error } = await supabase.from('bookmarks').insert({ title, url, user_id: user.id })
 
         if (error) {
-            // Rollback optimistic update on error
             setBookmarks((prev) => prev.filter((b) => b.id !== tempId))
             console.error('Error adding bookmark:', error)
             alert('Failed to add bookmark')
@@ -71,8 +68,20 @@ export default function BookmarkManager({ initialBookmarks, user }: { initialBoo
     }
 
     const deleteBookmark = async (id: string) => {
+        const removedBookmark = bookmarks.find(b => b.id === id);
+
+        // Optimistic update: remove from state immediately
+        setBookmarks((prev) => prev.filter((b) => b.id !== id))
+
         const { error } = await supabase.from('bookmarks').delete().eq('id', id)
+
         if (error) {
+            // Rollback optimistic update on error
+            if (removedBookmark) {
+                setBookmarks((prev) => [...prev, removedBookmark].sort((a, b) =>
+                    new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                ))
+            }
             console.error('Error deleting bookmark:', error)
             alert('Failed to delete bookmark')
         }
